@@ -50,6 +50,20 @@ Zuruecksetzen:
 Das Subnetz des AIS bleibt ueber die Interface-Route erreichbar, der NMEA-Stream
 laeuft also weiter.
 
+### Bestaetigte Werte an Bord
+
+Gemessen mit Internet ueber USB-Tethering vom Samsung S10 und gleichzeitig
+stehender WLAN-Verbindung zum AIS-Geraet:
+
+| Wert | |
+|---|---|
+| SSID | `B954_...` |
+| AIS-Geraet | `192.168.2.1` |
+| NMEA ueber TCP | Port `5000` |
+| OpenCPN | Verbindung vom Typ Netzwerk, Protokoll TCP, nur Empfang |
+
+Der Standardwert von `-AisPort` steht deshalb auf `5000`.
+
 ### Parameter
 
 | Parameter | Standard | Bedeutung |
@@ -57,7 +71,7 @@ laeuft also weiter.
 | `-Ssid` | `B954` | Praefix der AIS-SSID zur Adaptererkennung |
 | `-WlanAlias` | automatisch | WLAN-Adapter explizit angeben |
 | `-NetAlias` | automatisch | Internetadapter explizit angeben |
-| `-AisPort` | `2000` | Port fuer den NMEA-Verbindungstest, oft auch 10110 |
+| `-AisPort` | `5000` | Port fuer den NMEA-Verbindungstest, Alternativen 2000 / 10110 / 39150 |
 | `-MetricNet` | `10` | Metrik des Internetadapters |
 | `-MetricWlan` | `60` | Metrik des AIS-WLAN |
 

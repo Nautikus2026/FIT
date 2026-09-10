@@ -33,7 +33,7 @@ param(
     [string]$Ssid       = 'B954',
     [string]$WlanAlias  = '',
     [string]$NetAlias   = '',
-    [int]   $AisPort    = 2000,
+    [int]   $AisPort    = 5000,
     [int]   $MetricNet  = 10,
     [int]   $MetricWlan = 60,
     [switch]$Apply,
