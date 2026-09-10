@@ -90,17 +90,36 @@ $rows = foreach ($a in $up) {
                 -ErrorAction SilentlyContinue
     $prof = Get-NetConnectionProfile -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue
 
+    $sIp   = '-'
+    if ($ip) { $sIp = "$($ip.IPAddress)/$($ip.PrefixLength)" }
+
+    $sGw = Get-Gateway $a.ifIndex
+    if (-not $sGw) { $sGw = '-' }
+
+    $sMetric = '?'; $sAuto = '?'; $sDhcp = '?'
+    if ($ifc) {
+        $sMetric = $ifc.InterfaceMetric
+        $sAuto   = $ifc.AutomaticMetric
+        $sDhcp   = $ifc.Dhcp
+    }
+
+    $sProfile = '-'; $sConn = '-'
+    if ($prof) {
+        $sProfile = $prof.Name
+        $sConn    = $prof.IPv4Connectivity
+    }
+
     [pscustomobject]@{
         ifIndex   = $a.ifIndex
         Alias     = $a.InterfaceAlias
         Typ       = $a.InterfaceType
-        IPv4      = if ($ip)  { "$($ip.IPAddress)/$($ip.PrefixLength)" } else { '-' }
-        Gateway   = $(if ((Get-Gateway $a.ifIndex)) { Get-Gateway $a.ifIndex } else { '-' })
-        Metrik    = if ($ifc) { $ifc.InterfaceMetric } else { '?' }
-        AutoMetr  = if ($ifc) { $ifc.AutomaticMetric } else { '?' }
-        DHCP      = if ($ifc) { $ifc.Dhcp } else { '?' }
-        Profil    = if ($prof) { $prof.Name } else { '-' }
-        Internet  = if ($prof) { $prof.IPv4Connectivity } else { '-' }
+        IPv4      = $sIp
+        Gateway   = $sGw
+        Metrik    = $sMetric
+        AutoMetr  = $sAuto
+        DHCP      = $sDhcp
+        Profil    = $sProfile
+        Internet  = $sConn
     }
 }
 $rows | Format-Table -AutoSize | Out-String | Write-Host
@@ -153,13 +172,16 @@ $def = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
        ForEach-Object {
            $ifc = Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex `
                      -AddressFamily IPv4 -ErrorAction SilentlyContinue
+           $ifMetric = 0
+           if ($ifc) { $ifMetric = $ifc.InterfaceMetric }
+
            [pscustomobject]@{
                ifIndex     = $_.InterfaceIndex
                Alias       = $_.InterfaceAlias
                NextHop     = $_.NextHop
                RouteMetrik = $_.RouteMetric
-               IfMetrik    = if ($ifc) { $ifc.InterfaceMetric } else { 0 }
-               Summe       = $_.RouteMetric + $(if ($ifc) { $ifc.InterfaceMetric } else { 0 })
+               IfMetrik    = $ifMetric
+               Summe       = $_.RouteMetric + $ifMetric
            }
        } | Sort-Object Summe
 
@@ -242,12 +264,12 @@ if (-not (Test-Admin)) {
 }
 
 Set-NetIPInterface -InterfaceIndex $wlan.ifIndex -AddressFamily IPv4 `
-    -InterfaceMetric $MetricWlan
+    -AutomaticMetric Disabled -InterfaceMetric $MetricWlan
 Write-Ok "Metrik '$($wlan.InterfaceAlias)' = $MetricWlan (unattraktiv fuers Internet)."
 
 if ($net) {
     Set-NetIPInterface -InterfaceIndex $net.ifIndex -AddressFamily IPv4 `
-        -InterfaceMetric $MetricNet
+        -AutomaticMetric Disabled -InterfaceMetric $MetricNet
     Write-Ok "Metrik '$($net.InterfaceAlias)' = $MetricNet (bevorzugt fuers Internet)."
 }
 
@@ -268,6 +290,10 @@ if ($Static) {
         $prefix = $wIp.PrefixLength
         Write-Info "Setze feste IP $addr/$prefix ohne Gateway ..."
 
+        # Reihenfolge ist wichtig: solange DHCP aktiv ist, holt sich der Adapter
+        # eine entfernte Adresse samt Gateway sofort wieder.
+        Set-NetIPInterface -InterfaceIndex $wlan.ifIndex -AddressFamily IPv4 -Dhcp Disabled
+
         Get-NetIPAddress -InterfaceIndex $wlan.ifIndex -AddressFamily IPv4 `
             -ErrorAction SilentlyContinue |
             Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
@@ -275,7 +301,6 @@ if ($Static) {
             -ErrorAction SilentlyContinue |
             Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
 
-        Set-NetIPInterface -InterfaceIndex $wlan.ifIndex -AddressFamily IPv4 -Dhcp Disabled
         New-NetIPAddress -InterfaceIndex $wlan.ifIndex -AddressFamily IPv4 `
             -IPAddress $addr -PrefixLength $prefix | Out-Null
         Set-DnsClientServerAddress -InterfaceIndex $wlan.ifIndex -ResetServerAddresses
@@ -295,10 +320,13 @@ $defNow = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyConti
           ForEach-Object {
               $ifc = Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex `
                         -AddressFamily IPv4 -ErrorAction SilentlyContinue
+              $ifMetric = 0
+              if ($ifc) { $ifMetric = $ifc.InterfaceMetric }
+
               [pscustomobject]@{
                   ifIndex = $_.InterfaceIndex
                   Alias   = $_.InterfaceAlias
-                  Summe   = $_.RouteMetric + $(if ($ifc) { $ifc.InterfaceMetric } else { 0 })
+                  Summe   = $_.RouteMetric + $ifMetric
               }
           } | Sort-Object Summe | Select-Object -First 1
 
@@ -312,7 +340,8 @@ if ($defNow) {
 
 Write-Info ''
 Write-Info 'Test 1 - Internet (DNS-Port auf 1.1.1.1):'
-$t1 = Test-NetConnection -ComputerName '1.1.1.1' -Port 53 -WarningAction SilentlyContinue
+$t1 = Test-NetConnection -ComputerName '1.1.1.1' -Port 53 `
+          -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
 if ($t1.TcpTestSucceeded) {
     Write-Ok "erreichbar ueber '$($t1.InterfaceAlias)'"
 } else {
@@ -326,7 +355,8 @@ if ($wIp) {
 if ($aisIp) {
     Write-Info ''
     Write-Info "Test 2 - AIS-Geraet ($aisIp Port $AisPort):"
-    $t2 = Test-NetConnection -ComputerName $aisIp -Port $AisPort -WarningAction SilentlyContinue
+    $t2 = Test-NetConnection -ComputerName $aisIp -Port $AisPort `
+              -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
     if ($t2.TcpTestSucceeded) {
         Write-Ok "NMEA-Stream erreichbar ueber '$($t2.InterfaceAlias)'"
     } else {

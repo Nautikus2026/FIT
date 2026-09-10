@@ -70,6 +70,18 @@ des AIS-Geraets.
 
 ### Status
 
-Getestet wurde bisher nur die Logik auf dem Papier. Das Skript verwendet
-ausschliesslich Windows-Bordmittel ab Windows 8 (`Get-NetIPInterface`,
-`Set-NetIPInterface`, `Get-NetRoute`, `Remove-NetRoute`, `New-NetIPAddress`).
+Auf echter Hardware noch nicht ausgefuehrt. Das Skript verwendet ausschliesslich
+Windows-Bordmittel ab Windows 8 (`Get-NetIPInterface`, `Set-NetIPInterface`,
+`Get-NetRoute`, `Remove-NetRoute`, `New-NetIPAddress`).
+
+Ein statischer Durchgang hat vier Stellen korrigiert:
+
+- `if`-Statements als Hashtable-Werte durch vorher berechnete Variablen ersetzt,
+  weil die Schreibweise je nach PowerShell-Version einen Parserfehler ausloest
+- `-InterfaceMetric` wird zusammen mit `-AutomaticMetric Disabled` gesetzt,
+  sonst ueberschreibt Windows die Metrik wieder selbst
+- bei `-Static` wird DHCP jetzt vor dem Entfernen der Adressen abgeschaltet,
+  sonst holt sich der Adapter Adresse und Gateway sofort zurueck
+- `Test-NetConnection` laeuft mit `-ErrorAction SilentlyContinue`, damit ein
+  fehlgeschlagener Verbindungstest wegen `$ErrorActionPreference = 'Stop'`
+  nicht das ganze Skript abbricht
