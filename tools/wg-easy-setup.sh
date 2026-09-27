@@ -450,8 +450,11 @@ main() {
             run_checks
             rc=$?
             section 'Ergebnis'
-            if [ "$rc" -eq 0 ]; then
+            if [ "$rc" -eq 0 ] && [ "$LOGIN_DONE" = 1 ]; then
                 ok 'Alles in Ordnung.'
+            elif [ "$rc" -eq 0 ]; then
+                warn 'Technik in Ordnung, Einrichtung oder 2FA noch offen bzw. nicht pruefbar.'
+                next_steps
             else
                 bad 'Offene Punkte siehe oben.'
                 next_steps
