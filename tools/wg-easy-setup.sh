@@ -43,6 +43,7 @@ UI_PORT=51821
 CLOSED_PORT=51899    # Gegenprobe: auf diesem Port lauscht im Container nichts
 COMPOSE=()
 LOGIN_DONE=0         # 1, sobald Einrichtung fertig und jedes Konto 2FA hat
+SILENCE_OK=0         # 1, sobald UDP 51820 nachweislich stumm geblieben ist
 
 # Ohne IPv6 im Kernel scheitert das IPv6-Netz der Vorlage; dann nur IPv4 (reicht fuers LAN).
 IPV6=0
@@ -284,6 +285,7 @@ check_silence() {
     ref=$(probe_udp "$ip" "$CLOSED_PORT")
     case $wg in
         silent)
+            SILENCE_OK=1
             if [ "$ref" = refused ]; then
                 ok "UDP $WG_PORT antwortet Fremden nicht"
                 detail "(Zufallspaket ohne Antwort, Gegenprobe: geschlossener Port $CLOSED_PORT meldet sich)"
@@ -439,7 +441,7 @@ main() {
             start_container
             run_checks
             rc=$?
-            if [ "$rc" -eq 0 ] && [ "$LOGIN_DONE" = 1 ]; then
+            if [ "$rc" -eq 0 ] && [ "$LOGIN_DONE" = 1 ] && [ "$SILENCE_OK" = 1 ]; then
                 section 'Ergebnis'
                 ok 'Alles eingerichtet. Pruefen jederzeit mit --check.'
             else
@@ -450,10 +452,10 @@ main() {
             run_checks
             rc=$?
             section 'Ergebnis'
-            if [ "$rc" -eq 0 ] && [ "$LOGIN_DONE" = 1 ]; then
+            if [ "$rc" -eq 0 ] && [ "$LOGIN_DONE" = 1 ] && [ "$SILENCE_OK" = 1 ]; then
                 ok 'Alles in Ordnung.'
             elif [ "$rc" -eq 0 ]; then
-                warn 'Technik in Ordnung, Einrichtung oder 2FA noch offen bzw. nicht pruefbar.'
+                warn 'Technik in Ordnung, aber Einrichtung, 2FA oder Stummtest offen bzw. nicht pruefbar.'
                 next_steps
             else
                 bad 'Offene Punkte siehe oben.'
